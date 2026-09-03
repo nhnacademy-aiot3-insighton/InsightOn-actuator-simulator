@@ -12,6 +12,7 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record LgThinQControlResponse(String messageId, String timestamp, Map<String, Object> response) {
 
+    // 매번 새 messageId로 성공 응답 생성
     public static LgThinQControlResponse accepted() {
         return new LgThinQControlResponse(
                 UUID.randomUUID().toString(),

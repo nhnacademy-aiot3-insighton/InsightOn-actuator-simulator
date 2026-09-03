@@ -36,6 +36,7 @@ public class SmartThingsController {
     private final SmartThingsResponseAssembler assembler;
     private final ObjectMapper objectMapper;
 
+    // 토큰 확인 → 요청 로그 → 구조 검증 → capability 수만큼 ACCEPTED 응답
     @PostMapping("/devices/{deviceId}/commands")
     public SmartThingsCommandResponse executeCommands(
             @PathVariable String deviceId,
@@ -49,6 +50,7 @@ public class SmartThingsController {
         return assembler.commandResponse(command.desiredState().keySet());
     }
 
+    // 객체를 로그용 JSON 문자열로 (실패 시 toString)
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
