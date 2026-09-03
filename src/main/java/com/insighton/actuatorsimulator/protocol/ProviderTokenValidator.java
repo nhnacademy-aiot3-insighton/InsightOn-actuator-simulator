@@ -14,6 +14,7 @@ public class ProviderTokenValidator {
         this.expectedToken = expectedToken;
     }
 
+    // Authorization 헤더가 "Bearer <설정된 토큰>" 인지 확인, 아니면 401
     public void validate(String authorizationHeader) {
         if (authorizationHeader == null
                 || !authorizationHeader.startsWith(BEARER)

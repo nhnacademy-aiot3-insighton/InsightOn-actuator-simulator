@@ -37,6 +37,7 @@ public class LgThinQController {
     private final LgThinQRequestTranslator translator;
     private final ObjectMapper objectMapper;
 
+    // 토큰 확인 → 요청·헤더 로그 → 구조 검증 → messageId 응답
     @PostMapping("/{deviceId}/control")
     public LgThinQControlResponse control(
             @PathVariable String deviceId,
@@ -55,10 +56,12 @@ public class LgThinQController {
         return LgThinQControlResponse.accepted();
     }
 
+    // 헤더 값은 안 찍고 존재 여부만 로그로
     private String present(String header) {
         return header == null || header.isBlank() ? "(없음)" : "(있음)";
     }
 
+    // 객체를 로그용 JSON 문자열로 (실패 시 toString)
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);

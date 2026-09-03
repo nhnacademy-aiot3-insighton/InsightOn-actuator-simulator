@@ -6,89 +6,43 @@ import com.insighton.actuatorsimulator.smartthings.dto.SmartThingsCommandRequest
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 
-/** SmartThings capability 명령 → 공급자 독립 ProviderCommand (CORE Assembler의 역방향). */
+/**
+ * SmartThings "Execute commands" 요청의 구조 검증기.
+ *
+ * <p>값을 CORE 어휘로 되돌리지 않는다 — 어떤 capability가 어떤 command/argument로 왔는지 그대로 받아
+ * capability 수만큼 ACCEPTED를 돌려준다. capability가 이 목록에 없으면 400 (실제 API도 마찬가지).
+ */
 @Component
 public class SmartThingsRequestTranslator {
 
     private static final String PROVIDER_LABEL = "SMART_THINGS";
 
-    private static final Map<String, String> AC_MODE_TO_CORE = Map.of(
-            "cool", "COOL", "dry", "DRY", "wind", "FAN", "fanonly", "FAN", "auto", "AUTO");
-    private static final Map<String, String> PURIFIER_MODE_TO_CORE = Map.of(
-            "auto", "AUTO", "sleep", "SLEEP", "turbo", "TURBO");
-    private static final Map<Integer, String> FAN_SPEED_TO_CORE = Map.of(
-            1, "LOW", 2, "MID", 3, "HIGH");
+    // 이 mock이 아는 capability (실제 SmartThings capability 이름). 이 외는 400.
+    private static final Set<String> KNOWN_CAPABILITIES = Set.of(
+            "switch", "airConditionerMode", "airPurifierFanMode", "fanSpeed",
+            "fanOscillationMode", "thermostatCoolingSetpoint");
 
+    // commands 배열을 구조 검증하고 capability→받은 값 맵으로 정리 (로그·result 개수용. 값 변환 없음).
     public ProviderCommand translate(String deviceId, SmartThingsCommandRequest request) {
         if (request == null || request.commands() == null || request.commands().isEmpty()) {
             throw new SimulatorException.BadRequest("commands가 비어 있습니다");
         }
 
-        Map<String, Object> desiredState = new LinkedHashMap<>();
+        Map<String, Object> received = new LinkedHashMap<>();
         for (SmartThingsCommandRequest.Command command : request.commands()) {
-            String capability = command.capability() == null ? "" : command.capability();
-            switch (capability) {
-                case "switch" -> desiredState.put("power", toPower(command.command()));
-                case "airConditionerMode" -> desiredState.put("mode", fromTable(AC_MODE_TO_CORE, lowerArg(command), capability));
-                case "airPurifierFanMode" -> desiredState.put("mode", fromTable(PURIFIER_MODE_TO_CORE, lowerArg(command), capability));
-                case "fanSpeed" -> desiredState.put("mode", fromFanSpeed(firstArg(command)));
-                case "thermostatCoolingSetpoint" -> desiredState.put("temperature", toTemperature(firstArg(command)));
-                default -> throw new SimulatorException.BadRequest("지원하지 않는 capability: " + capability);
+            String capability = command.capability();
+            if (capability == null || !KNOWN_CAPABILITIES.contains(capability)) {
+                throw new SimulatorException.BadRequest("지원하지 않는 capability: " + capability);
             }
+            received.put(capability, "switch".equals(capability) ? command.command() : firstArg(command));
         }
-        return new ProviderCommand(deviceId, desiredState, PROVIDER_LABEL);
+        return new ProviderCommand(deviceId, received, PROVIDER_LABEL);
     }
 
-    private String toPower(String stCommand) {
-        if ("on".equalsIgnoreCase(stCommand)) {
-            return "ON";
-        }
-        if ("off".equalsIgnoreCase(stCommand)) {
-            return "OFF";
-        }
-        throw new SimulatorException.BadRequest("지원하지 않는 switch 명령: " + stCommand);
-    }
-
-    private String fromTable(Map<String, String> table, String value, String capability) {
-        String core = table.get(value);
-        if (core == null) {
-            throw new SimulatorException.BadRequest("지원하지 않는 " + capability + " 값: " + value);
-        }
-        return core;
-    }
-
-    private String fromFanSpeed(Object arg) {
-        int speed;
-        try {
-            speed = (int) Math.round(Double.parseDouble(String.valueOf(arg)));
-        } catch (NumberFormatException e) {
-            throw new SimulatorException.BadRequest("fanSpeed 인자는 숫자여야 합니다: " + arg);
-        }
-        String core = FAN_SPEED_TO_CORE.get(speed);
-        if (core == null) {
-            throw new SimulatorException.BadRequest("지원하지 않는 fanSpeed 값: " + speed);
-        }
-        return core;
-    }
-
-    private Object toTemperature(Object arg) {
-        try {
-            double d = Double.parseDouble(String.valueOf(arg));
-            if (d == Math.rint(d) && !Double.isInfinite(d)) {
-                return (int) d;
-            }
-            return d;
-        } catch (NumberFormatException e) {
-            throw new SimulatorException.BadRequest("setCoolingSetpoint 인자는 숫자여야 합니다: " + arg);
-        }
-    }
-
-    private String lowerArg(SmartThingsCommandRequest.Command command) {
-        return String.valueOf(firstArg(command)).toLowerCase();
-    }
-
+    // switch 외 capability는 arguments[0]이 있어야 한다
     private Object firstArg(SmartThingsCommandRequest.Command command) {
         List<Object> arguments = command.arguments();
         if (arguments == null || arguments.isEmpty()) {
