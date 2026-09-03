@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class SmartThingsResponseAssembler {
 
+    // 반영된 상태 키마다 ACCEPTED result 하나씩
     public SmartThingsCommandResponse commandResponse(Set<String> appliedKeys) {
         return new SmartThingsCommandResponse(appliedKeys.stream()
                 .map(k -> new SmartThingsCommandResponse.Result(UUID.randomUUID().toString(), "ACCEPTED"))

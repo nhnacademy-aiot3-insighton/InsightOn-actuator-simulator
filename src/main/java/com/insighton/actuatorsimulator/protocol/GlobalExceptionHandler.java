@@ -17,17 +17,20 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    // 공통 오류 바디 { "error": { code, message } } 로 감싼다
     private static ResponseEntity<Map<String, Object>> error(HttpStatus status, String code, String message) {
         return ResponseEntity.status(status).body(Map.of(
                 "error", Map.of("code", code, "message", message == null ? status.getReasonPhrase() : message)));
     }
 
+    // 구조·값 오류, 역직렬화 실패 → 400
     @ExceptionHandler({SimulatorException.BadRequest.class, HttpMessageNotReadableException.class,
             IllegalArgumentException.class})
     public ResponseEntity<Map<String, Object>> handleBadRequest(Exception e) {
         return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST", e.getMessage());
     }
 
+    // Bearer 토큰 불일치 → 401
     @ExceptionHandler(SimulatorException.Unauthorized.class)
     public ResponseEntity<Map<String, Object>> handleUnauthorized(SimulatorException.Unauthorized e) {
         return error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", e.getMessage());

@@ -23,45 +23,42 @@ class SmartThingsRequestTranslatorTest {
     }
 
     @Test
-    @DisplayName("switch on/off -> power ON/OFF")
+    @DisplayName("switch 명령은 command 문자열(on/off)을 그대로 담는다")
     void power() {
         ProviderCommand on = translator.translate("d", request(cmd("switch", "on")));
-        assertThat(on.desiredState()).containsEntry("power", "ON");
+        assertThat(on.desiredState()).containsEntry("switch", "on");
         assertThat(on.providerLabel()).isEqualTo("SMART_THINGS");
         assertThat(on.deviceId()).isEqualTo("d");
 
         assertThat(translator.translate("d", request(cmd("switch", "off"))).desiredState())
-                .containsEntry("power", "OFF");
+                .containsEntry("switch", "off");
     }
 
     @Test
-    @DisplayName("airConditionerMode -> CORE mode (cool->COOL, wind->FAN)")
-    void mode() {
-        assertThat(translator.translate("d", request(cmd("airConditionerMode", "setAirConditionerMode", "cool")))
-                .desiredState()).containsEntry("mode", "COOL");
-        assertThat(translator.translate("d", request(cmd("airConditionerMode", "setAirConditionerMode", "wind")))
-                .desiredState()).containsEntry("mode", "FAN");
-    }
-
-    @Test
-    @DisplayName("thermostatCoolingSetpoint -> temperature (정수 보존)")
-    void temperature() {
-        assertThat(translator.translate("d", request(cmd("thermostatCoolingSetpoint", "setCoolingSetpoint", 22)))
-                .desiredState()).containsEntry("temperature", 22);
-        assertThat(translator.translate("d", request(cmd("thermostatCoolingSetpoint", "setCoolingSetpoint", 22.5)))
-                .desiredState()).containsEntry("temperature", 22.5);
-    }
-
-    @Test
-    @DisplayName("여러 capability를 한 번에 -> 모두 desiredState에 반영")
-    void 복합명령() {
+    @DisplayName("switch 외 capability는 arguments[0]을 값 변환 없이 그대로 담는다")
+    void 값_그대로_보존() {
         ProviderCommand result = translator.translate("d", request(
-                cmd("switch", "on"),
                 cmd("airConditionerMode", "setAirConditionerMode", "cool"),
-                cmd("thermostatCoolingSetpoint", "setCoolingSetpoint", 20)));
+                cmd("fanOscillationMode", "setFanOscillationMode", "fixed"),
+                cmd("airPurifierFanMode", "setAirPurifierFanMode", "sleep"),
+                cmd("fanSpeed", "setFanSpeed", 2),
+                cmd("thermostatCoolingSetpoint", "setCoolingSetpoint", 22)));
 
         assertThat(result.desiredState())
-                .containsEntry("power", "ON").containsEntry("mode", "COOL").containsEntry("temperature", 20);
+                .containsEntry("airConditionerMode", "cool")
+                .containsEntry("fanOscillationMode", "fixed")
+                .containsEntry("airPurifierFanMode", "sleep")
+                .containsEntry("fanSpeed", 2)
+                .containsEntry("thermostatCoolingSetpoint", 22);
+    }
+
+    @Test
+    @DisplayName("CORE 어휘로 되돌리지 않는다 — 알 수 없는 값이어도 구조만 맞으면 통과")
+    void 값검증_안함() {
+        assertThat(translator.translate("d", request(cmd("airConditionerMode", "x", "hypercool")))
+                .desiredState()).containsEntry("airConditionerMode", "hypercool");
+        assertThat(translator.translate("d", request(cmd("fanSpeed", "setFanSpeed", 9)))
+                .desiredState()).containsEntry("fanSpeed", 9);
     }
 
     @Test
@@ -72,29 +69,16 @@ class SmartThingsRequestTranslatorTest {
     }
 
     @Test
-    @DisplayName("지원하지 않는 capability / 잘못된 값이면 BadRequest")
-    void 잘못된요청() {
-        assertThatThrownBy(() -> translator.translate("d", request(cmd("fanOscillationMode", "x", "all"))))
-                .isInstanceOf(SimulatorException.BadRequest.class);
-        assertThatThrownBy(() -> translator.translate("d", request(cmd("switch", "explode"))))
-                .isInstanceOf(SimulatorException.BadRequest.class);
-        assertThatThrownBy(() -> translator.translate("d", request(cmd("airConditionerMode", "x", "hypercool"))))
+    @DisplayName("이 mock이 모르는 capability면 BadRequest (실제 API도 동일)")
+    void 미지원capability() {
+        assertThatThrownBy(() -> translator.translate("d", request(cmd("colorControl", "setHue", "50"))))
                 .isInstanceOf(SimulatorException.BadRequest.class);
     }
 
     @Test
-    @DisplayName("airPurifierFanMode -> mode (sleep -> SLEEP)")
-    void 공청기_mode() {
-        assertThat(translator.translate("d", request(cmd("airPurifierFanMode", "setAirPurifierFanMode", "sleep")))
-                .desiredState()).containsEntry("mode", "SLEEP");
-    }
-
-    @Test
-    @DisplayName("fanSpeed(정수) -> mode (2 -> MID), 범위 밖이면 BadRequest")
-    void 환풍기_mode() {
-        assertThat(translator.translate("d", request(cmd("fanSpeed", "setFanSpeed", 2)))
-                .desiredState()).containsEntry("mode", "MID");
-        assertThatThrownBy(() -> translator.translate("d", request(cmd("fanSpeed", "setFanSpeed", 9))))
+    @DisplayName("switch 외 capability에 arguments가 없으면 BadRequest")
+    void arguments_누락() {
+        assertThatThrownBy(() -> translator.translate("d", request(cmd("airConditionerMode", "setAirConditionerMode"))))
                 .isInstanceOf(SimulatorException.BadRequest.class);
     }
 }
